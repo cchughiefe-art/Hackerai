@@ -1,75 +1,72 @@
 import streamlit as st
-import subprocess
 import google.generativeai as genai
-import os
 
-# --- APP CONFIG ---
-st.set_page_config(page_title="HackerAI Private", page_icon="🕵️", layout="wide")
-st.title("💀 Private HackerAI Terminal")
+# --- UI CONFIG ---
+st.set_page_config(page_title="HackerAI Clone", layout="centered")
 
-# Sidebar for API Key
-with st.sidebar:
-    st.header("Settings")
-    api_key = st.text_input("Enter Gemini API Key", type="password")
-    if api_key:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-3-flash')
-    st.info("Get a free key at aistudio.google.com")
+# Custom CSS to mimic the sleek mobile dark-mode UI
+st.markdown("""
+    <style>
+    .stApp { background-color: #000000; color: #FFFFFF; }
+    .stChatInputContainer { bottom: 20px; }
+    .greeting { text-align: center; margin-top: 100px; font-size: 24px; font-weight: bold; }
+    </style>
+""", unsafe_allow_html=True)
 
-if not api_key:
-    st.warning("Please enter your API key in the sidebar to start.")
-    st.stop()
+# --- APP STATE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "mode" not in st.session_state:
+    st.session_state.mode = "Ask"
+if "model_choice" not in st.session_state:
+    st.session_state.model_choice = "Gemini 3 Flash"
 
-# --- FEATURES (TABS) ---
-tab1, tab2, tab3 = st.tabs(["🌐 Network Recon", "📄 Code Auditor", "🐍 Exploit Gen"])
+# --- TOP NAVIGATION ---
+col1, col2, col3 = st.columns([1, 1, 1])
+with col1:
+    if st.button("Upgrade Plan", use_container_width=True):
+        st.toast("Pro features coming soon!")
 
-# --- TAB 1: NETWORK RECON (NMAP/SQLMAP) ---
-with tab1:
-    st.header("Network & Web Scanner")
-    target = st.text_input("Target URL or IP", placeholder="example.com")
-    scan_type = st.selectbox("Scan Type", ["Quick Scan (Nmap)", "SQL Injection Check (SQLmap)"])
-    
-    if st.button("Execute Scan"):
-        with st.spinner("Hacking in progress..."):
-            try:
-                if "Nmap" in scan_type:
-                    cmd = ["nmap", "-F", target]
-                else:
-                    cmd = ["sqlmap", "-u", target, "--batch", "--random-agent", "--level=1"]
-                
-                output = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode()
-                st.code(output)
-                
-                # AI Analysis of the scan
-                st.subheader("🤖 AI Analysis")
-                analysis = model.generate_content(f"Analyze these scan results for vulnerabilities: {output}")
-                st.write(analysis.text)
-            except Exception as e:
-                st.error(f"Error: {e}")
+# --- MAIN GREETING ---
+if not st.session_state.messages:
+    st.markdown('<p class="greeting">What\'s on the scope today, Courage?</p>', unsafe_allow_html=True)
 
-# --- TAB 2: CODE AUDITOR (STATIC ANALYSIS) ---
-with tab2:
-    st.header("Source Code Security Audit")
-    uploaded_file = st.file_uploader("Upload Code File (.py, .js, .php, .c)", type=["py", "js", "php", "c", "cpp"])
-    
-    if uploaded_file:
-        code_content = uploaded_file.read().decode()
-        st.code(code_content[:500] + "...", language="python")
+# --- CHAT HISTORY ---
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# --- BOTTOM CONTROLS ---
+# Mimicking the floating selector bar in your screenshot
+c1, c2, c3 = st.columns([1, 1, 2])
+with c1:
+    mode_btn = st.popover(f"💬 {st.session_state.mode}")
+    if mode_btn.button("Ask (Talk)"): st.session_state.mode = "Ask"
+    if mode_btn.button("Agent (Execute)"): st.session_state.mode = "Agent"
+
+with c2:
+    model_btn = st.popover(f"🤖 {st.session_state.model_choice}")
+    if model_btn.button("Gemini 3 Flash"): st.session_state.model_choice = "Gemini 3 Flash"
+    if model_btn.button("Claude Sonnet 4.6"): st.session_state.model_choice = "Claude Sonnet 4.6"
+    if model_btn.button("Grok 4.1"): st.session_state.model_choice = "Grok 4.1"
+
+# --- CHAT INPUT ---
+if prompt := st.chat_input("Ask, learn, brainstorm"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # AI RESPONSE LOGIC
+    with st.chat_message("assistant"):
+        # Fix: Use 'gemini-3-flash-preview' for the 2026 API
+        genai.configure(api_key=st.secrets["GEMINI_KEY"])
+        model = genai.GenerativeModel('gemini-3-flash-preview')
         
-        if st.button("Audit Code"):
-            with st.spinner("Analyzing logic flaws..."):
-                prompt = f"Perform a deep security audit on this code. Find OWASP top 10 bugs and provide a fix:\n\n{code_content}"
-                response = model.generate_content(prompt)
-                st.markdown(response.text)
-
-# --- TAB 3: EXPLOIT GEN (PAYLOADS) ---
-with tab3:
-    st.header("Autonomous Exploit Generator")
-    vuln_desc = st.text_area("Describe the vulnerability found", placeholder="e.g. Reflected XSS on the search parameter")
-    
-    if st.button("Generate PoC"):
-        with st.spinner("Writing exploit code..."):
-            prompt = f"Write a professional Proof of Concept (PoC) exploit script for the following vulnerability: {vuln_desc}. Add a warning that this is for educational purposes only."
-            response = model.generate_content(prompt)
-            st.markdown(response.text)
-              
+        # Add system context based on Mode
+        context = "You are a passive security consultant." if st.session_state.mode == "Ask" else "You are an active penetration testing agent."
+        full_prompt = f"{context}\nUser says: {prompt}"
+        
+        response = model.generate_content(full_prompt)
+        st.markdown(response.text)
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+        

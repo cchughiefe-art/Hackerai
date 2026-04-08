@@ -13,7 +13,7 @@ with st.sidebar:
     api_key = st.text_input("Enter Gemini API Key", type="password")
     if api_key:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-3-flash')
     st.info("Get a free key at aistudio.google.com")
 
 if not api_key:
